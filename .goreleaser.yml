@@ -1,0 +1,112 @@
+version: 2
+
+project_name: git-mirror
+
+before:
+  hooks:
+    - go mod download
+
+release:
+  prerelease: "false"
+
+env:
+  - CGO_ENABLED=0
+
+# The server relies on flock(2) and unix sockets, so only unix targets are built.
+builds:
+  - id: linux
+    main: ./cmd/git-mirror
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X git-mirror/pkg/version.Version={{ .Version }}
+
+  - id: osx
+    main: ./cmd/git-mirror
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X git-mirror/pkg/version.Version={{ .Version }}
+
+archives:
+  - name_template: >-
+      {{ .Binary }}_v{{ .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}amd64
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+      - deploy/git-mirror.service
+
+checksum:
+  name_template: "checksums.sha256"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-devel"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+nfpms:
+  - file_name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    maintainer: Oleksii YouSysAdmin
+    homepage: https://github.com/YouSysAdmin/git-mirror
+    description: Mirror git repositories into a private network and serve them over HTTP and SSH
+    license: "MIT"
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    section: utils
+    dependencies:
+      - git
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/git-mirror/copyright
+        file_info:
+          mode: 0644
+      - src: ./deploy/git-mirror.service
+        dst: /usr/lib/systemd/system/git-mirror.service
+        type: config
+        file_info:
+          mode: 0644
+    scripts:
+      postinstall: ./build/nfpm/postinstall.sh
+
+dockers_v2:
+  - ids: [linux]
+    images:
+      - ghcr.io/yousysadmin/git-mirror
+    tags:
+      - "{{ .Version }}"
+      - latest
+    dockerfile: build/docker/Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.source: https://github.com/YouSysAdmin/git-mirror
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.description: Mirror git repositories into a private network and serve them over HTTP and SSH
+      org.opencontainers.image.licenses: MIT

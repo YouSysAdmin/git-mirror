@@ -1,0 +1,41 @@
+# systemd unit for the git-mirror sync server.
+#
+# The data dir is the default ~/.local/share/git-mirror of the service user,
+# so the CLI finds it without extra flags:
+#
+#   sudo useradd -r -m -d /home/git -s /usr/sbin/nologin git
+#   sudo install -m 0755 bin/git-mirror /usr/bin/git-mirror
+#   sudo install -m 0644 deploy/git-mirror.service /etc/systemd/system/
+#   sudo systemctl enable --now git-mirror
+#
+# Manage repositories as the service user:
+#   sudo -u git git-mirror add https://github.com/golang/go.git
+#   sudo -u git git-mirror tui
+#
+# If the home of the git user is not /home/git, change the paths below.
+
+[Unit]
+Description=git-mirror git synchronization server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=git
+Group=git
+# Create the data dir and the initial config before the sandbox below is set up
+ExecStartPre=+/usr/sbin/runuser -u git -- /usr/bin/git-mirror init
+# Ports come from config.json (listen, ssh_listen)
+ExecStart=/usr/bin/git-mirror server
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=60s
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/git/.local/share/git-mirror
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

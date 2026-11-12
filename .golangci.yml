@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - misspell
+    - unconvert
+    - unparam
+    - gocritic
+    - revive
+    - bodyclose
+    - nilerr
+    - errorlint
+    - copyloopvar
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*text/tabwriter.Writer).Flush
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - git-mirror

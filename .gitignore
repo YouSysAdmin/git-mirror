@@ -1,0 +1,8 @@
+/bin/
+/.data/
+/datadir/
+/dist/
+*.out
+*.test
+
+.idea

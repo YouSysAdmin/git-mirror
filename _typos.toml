@@ -1,0 +1,11 @@
+# typos configuration - suppress false positives
+# https://github.com/crate-ci/typos/blob/master/docs/reference.md
+
+[files]
+extend-exclude = [
+    "go.sum",
+    "dist/***",
+    "bin/***",
+]
+
+[default.extend-words]

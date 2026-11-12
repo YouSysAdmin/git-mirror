@@ -1,0 +1,143 @@
+# Run `task` with no arguments for the list. Install go-task from
+# https://taskfile.dev - every task below is plain sh.
+version: "3"
+
+vars:
+  BIN: git-mirror
+  VERSION:
+    sh: 'echo "${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"'
+  LDFLAGS: "-s -w -X git-mirror/pkg/version.Version={{.VERSION}}"
+  DEV_DIR: ./.data
+
+tasks:
+  default:
+    desc: List the tasks
+    silent: true
+    cmds:
+      - task --list
+
+  build:
+    desc: Build bin/git-mirror
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/{{.BIN}} ./cmd/git-mirror
+
+  install:
+    desc: go install git-mirror into GOBIN
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - go install -trimpath -ldflags "{{.LDFLAGS}}" ./cmd/git-mirror
+
+  binary-linux-arm:
+    desc: Build for linux/arm64 into bin/linux/arm
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: arm64
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/linux/arm/{{.BIN}} ./cmd/git-mirror
+
+  binary-linux-amd:
+    desc: Build for linux/amd64 into bin/linux/amd
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/linux/amd/{{.BIN}} ./cmd/git-mirror
+
+  test:
+    desc: Go tests (extra flags after --, e.g. task test -- -run TestSync -v ./internal/mirror)
+    cmds:
+      - go test {{.CLI_ARGS | default "./..."}}
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  # Lists what is unformatted and does NOT fail on it.
+  fmt:
+    desc: List unformatted Go files
+    cmds:
+      - gofmt -l cmd internal pkg
+
+  fmt-fix:
+    desc: gofmt -w over the Go sources
+    cmds:
+      - gofmt -w cmd internal pkg
+
+  lint:
+    desc: golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  typos:
+    desc: Spell check the repository
+    cmds:
+      - typos --config _typos.toml
+
+  shell-check:
+    desc: shellcheck over the shell scripts
+    cmds:
+      - git ls-files '*.sh' | xargs shellcheck --format=tty
+
+  check:
+    desc: vet, lint, tests, gofmt, typos, shellcheck and the GoReleaser config
+    cmds:
+      - task: vet
+      - task: lint
+      - task: test
+      - task: fmt
+      - task: typos
+      - task: shell-check
+      - task: release-check
+
+  hooks:
+    desc: Install the lefthook git hooks
+    cmds:
+      - lefthook install
+
+  release-check:
+    desc: goreleaser check
+    cmds:
+      - goreleaser check
+
+  # Local dry run of the release pipeline: archives, deb/rpm/apk and
+  # container images (one per platform, nothing is published).
+  snapshot:
+    desc: GoReleaser dry run into dist/
+    cmds:
+      - goreleaser release --snapshot --clean --skip=publish
+
+  # Container image without goreleaser (linux/amd64 only).
+  docker:
+    desc: Build the container image git-mirror:dev
+    deps: [binary-linux-amd]
+    cmds:
+      - rm -rf dist/docker-ctx && mkdir -p dist/docker-ctx/linux/amd64
+      - cp bin/linux/amd/{{.BIN}} dist/docker-ctx/linux/amd64/
+      - docker build --platform linux/amd64 -t git-mirror:dev -f build/docker/Dockerfile dist/docker-ctx
+
+  run-server:
+    desc: Run the server on 127.0.0.1:8080 (ssh 2222) with the throwaway data dir ./.data
+    deps: [build]
+    env:
+      GIT_MIRROR_DIR: "{{.DEV_DIR}}"
+    cmds:
+      - ./bin/{{.BIN}} server --listen 127.0.0.1:8080 --ssh-listen 127.0.0.1:2222 --tick 5s
+
+  run-tui:
+    desc: Run the TUI against ./.data
+    deps: [build]
+    env:
+      GIT_MIRROR_DIR: "{{.DEV_DIR}}"
+    cmds:
+      - ./bin/{{.BIN}} tui
+
+  clean:
+    desc: Remove bin and dist
+    cmds:
+      - rm -rf bin dist
